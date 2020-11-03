@@ -77,6 +77,8 @@ def min_entropy(number_of_0: int, number_of_1: int) -> gmpy2.mpfr:
     if number_of_1 < 0: raise ValueError('number_of_1 must be >= 0')
     
     length = number_of_0 + number_of_1
+    if length == 0: raise ValueError('(number_of_0 + number_of_1) must be > 0')
+    
     with gmpy2.local_context(gmpy2.context(), precision = length + 1):
         return -gmpy2.log2(gmpy2.mpfr(max(number_of_0, number_of_1)) / gmpy2.mpfr(length))
 
