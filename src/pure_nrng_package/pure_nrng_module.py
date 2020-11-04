@@ -32,7 +32,7 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.8.0'
+    version = '0.8.1'
     
     initial_test_size = 2 ** 13  #The units are bits.
     count_queue_maxlen = 31
@@ -45,6 +45,7 @@ class pure_nrng:
             ----------
             *true_randbits_tuple: Callable
                 Some callable external true random source objects. Like: secrets.randbits(bit_size) 一些可调用的外部真随机源对象。形如：secrets.randbits(bit_size)
+                If it does not exist, the default is to call the true random source provided by the operating system. 如果不存在的话，则默认调用操作系统提供的真随机源。
         '''
         for true_randbits in true_randbits_tuple:
             assert isinstance(true_randbits, Callable), f'true_randbits must be an Callable, got type {type(true_randbits).__name__}'
@@ -71,7 +72,9 @@ class pure_nrng:
             sum_of_0 += number_of_0
             sum_of_1 += number_of_1
             
-            self.raw_entropy_dict.update({true_randbits: {'count_queue_of_0': count_queue_of_0, 'count_queue_of_1': count_queue_of_1, 'sum_of_0': sum_of_0, 'sum_of_1': sum_of_1}})
+            min_entropy_value = rng_util.min_entropy(sum_of_0, sum_of_1)
+            
+            self.raw_entropy_dict.update({true_randbits: {'count_queue_of_0': count_queue_of_0, 'count_queue_of_1': count_queue_of_1, 'sum_of_0': sum_of_0, 'sum_of_1': sum_of_1, 'min_entropy_value': min_entropy_value}})
     
     
     def true_rand_bits(self, bit_size: int, unbias: bool = True) -> int:
@@ -95,23 +98,41 @@ class pure_nrng:
         assert isinstance(unbias, bool), f'unbias must be an bool, got type {type(unbias).__name__}'
         if bit_size <= 0: raise ValueError('bit_size must be > 0')
         
+        initial_test_size = self.__class__.initial_test_size
+        count_queue_maxlen = self.__class__.count_queue_maxlen
+        
         if unbias:
             unbias_entropy_data = 0
             
             for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
-                read_raw_length = int(gmpy2.ceil(bit_size * 2 / rng_util.min_entropy(binary_statistics_dict['sum_of_0'], binary_statistics_dict['sum_of_1'])))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
-                raw_entropy_data = true_randbits(read_raw_length)
-                number_of_1 = gmpy2.popcount(raw_entropy_data)
-                number_of_0 = read_raw_length - number_of_1
-                
-                binary_statistics_dict['sum_of_0'] -= binary_statistics_dict['count_queue_of_0'].popleft()
-                binary_statistics_dict['sum_of_0'] += number_of_0
-                binary_statistics_dict['count_queue_of_0'].append(number_of_0)
-                
-                binary_statistics_dict['sum_of_1'] -= binary_statistics_dict['count_queue_of_1'].popleft()
-                binary_statistics_dict['sum_of_1'] += number_of_1
-                binary_statistics_dict['count_queue_of_1'].append(number_of_1)
-                
+                min_entropy_value = binary_statistics_dict['min_entropy_value']
+                if min_entropy_value != 0:
+                    read_raw_length = int(gmpy2.ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
+                else:
+                    read_raw_length = initial_test_size
+                for _ in range(3):  #The entropy source is re-read when the "minimum entropy" of the source is zero. Try twice at most.  当熵源发生“最小熵”为0的异常，就会重新读熵源。最多重试两次。
+                    raw_entropy_data = true_randbits(read_raw_length)
+                    number_of_1 = gmpy2.popcount(raw_entropy_data)
+                    number_of_0 = read_raw_length - number_of_1
+                    
+                    if len(binary_statistics_dict['count_queue_of_0']) == count_queue_maxlen:
+                        binary_statistics_dict['sum_of_0'] -= binary_statistics_dict['count_queue_of_0'].popleft()
+                    binary_statistics_dict['sum_of_0'] += number_of_0
+                    binary_statistics_dict['count_queue_of_0'].append(number_of_0)
+                    
+                    if len(binary_statistics_dict['count_queue_of_1']) == count_queue_maxlen:
+                        binary_statistics_dict['sum_of_1'] -= binary_statistics_dict['count_queue_of_1'].popleft()
+                    binary_statistics_dict['sum_of_1'] += number_of_1
+                    binary_statistics_dict['count_queue_of_1'].append(number_of_1)
+                    
+                    min_entropy_value = rng_util.min_entropy(binary_statistics_dict['sum_of_0'], binary_statistics_dict['sum_of_1'])
+                    if min_entropy_value != 0:
+                        binary_statistics_dict['min_entropy_value'] = min_entropy_value
+                        break
+                    else:
+                        read_raw_length = initial_test_size
+                else:
+                    raise RuntimeError(f'Entropy source [{true_randbits}] exception!')
                 unbias_entropy_data ^= rng_util.randomness_extractor(raw_entropy_data, bit_size)
             
             return unbias_entropy_data
