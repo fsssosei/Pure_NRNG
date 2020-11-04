@@ -13,7 +13,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-from typing import Optional, Callable
+from typing import Callable
 import gmpy2
 import rng_util_package.rng_util_module as rng_util
 
@@ -32,7 +32,7 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.8.1'
+    version = '0.8.2'
     
     initial_test_size = 2 ** 13  #The units are bits.
     count_queue_maxlen = 31
