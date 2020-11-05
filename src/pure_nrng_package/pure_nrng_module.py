@@ -32,7 +32,7 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.8.2'
+    version = '0.8.3'
     
     initial_test_size = 2 ** 13  #The units are bits.
     count_queue_maxlen = 31
@@ -99,7 +99,6 @@ class pure_nrng:
         if bit_size <= 0: raise ValueError('bit_size must be > 0')
         
         initial_test_size = self.__class__.initial_test_size
-        count_queue_maxlen = self.__class__.count_queue_maxlen
         
         if unbias:
             unbias_entropy_data = 0
@@ -115,12 +114,12 @@ class pure_nrng:
                     number_of_1 = gmpy2.popcount(raw_entropy_data)
                     number_of_0 = read_raw_length - number_of_1
                     
-                    if len(binary_statistics_dict['count_queue_of_0']) == count_queue_maxlen:
+                    if len(binary_statistics_dict['count_queue_of_0']) == binary_statistics_dict['count_queue_of_0'].maxlen:
                         binary_statistics_dict['sum_of_0'] -= binary_statistics_dict['count_queue_of_0'].popleft()
                     binary_statistics_dict['sum_of_0'] += number_of_0
                     binary_statistics_dict['count_queue_of_0'].append(number_of_0)
                     
-                    if len(binary_statistics_dict['count_queue_of_1']) == count_queue_maxlen:
+                    if len(binary_statistics_dict['count_queue_of_1']) == binary_statistics_dict['count_queue_of_1'].maxlen:
                         binary_statistics_dict['sum_of_1'] -= binary_statistics_dict['count_queue_of_1'].popleft()
                     binary_statistics_dict['sum_of_1'] += number_of_1
                     binary_statistics_dict['count_queue_of_1'].append(number_of_1)
