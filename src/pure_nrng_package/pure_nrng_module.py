@@ -33,7 +33,7 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.9.0'
+    version = '0.9.1'
     
     True_Randbits = Callable[[int], int]
     Unbias = bool
