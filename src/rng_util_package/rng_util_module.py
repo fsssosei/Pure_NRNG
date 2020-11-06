@@ -127,45 +127,49 @@ def randomness_extractor(raw_entropy_data: int, output_bit_size: int) -> int:
     return bit_length_mask(int.from_bytes(hash_raw_entropy_bytes, byteorder = 'little'), output_bit_size)
 
 
-def prev_prime(n: int) -> gmpy2.mpz:
+def prev_prime(x: int, n: int = 128) -> gmpy2.mpz:
     '''
-        Find the largest prime number less than n.  查找小于n的最大质数。
+        Find the largest prime number less than x.  查找小于x的最大质数。
         
         Parameters
         ----------
-        n: int
+        x: int
             The starting number to find.  查找的起点数字。
+        
+        n: int
+            Perform Miller-Rabin tests up to n times.  执行最多n次米勒-拉宾测试。
         
         Returns
         -------
         prev_prime: gmpy2.mpz
-            Return the largest prime smaller than n.
+            Return the largest prime smaller than x.
         
         Examples
         --------
         >>> prev_prime(5)
         mpz(3)
     '''
+    assert isinstance(x, int), f'x must be an int, got type {type(x).__name__}'
     assert isinstance(n, int), f'n must be an int, got type {type(n).__name__}'
     
-    n = gmpy2.mpz(n)
-    if n <= 2:
+    x = gmpy2.mpz(x)
+    if x <= 2:
         raise ValueError('There are no prime Numbers less than 2')
-    elif n <= 5:
-        return {3: gmpy2.mpz(2), 4: gmpy2.mpz(3), 5: gmpy2.mpz(3)}[n]
+    elif x <= 5:
+        return {3: gmpy2.mpz(2), 4: gmpy2.mpz(3), 5: gmpy2.mpz(3)}[x]
     else:
-        six_times = gmpy2.mpz(6) * (n // gmpy2.mpz(6))
-        if (n - six_times) <= 1:
-            n = six_times - gmpy2.mpz(1)
-            if gmpy2.is_prime(n, 128):
-                return n
-            n -= gmpy2.mpz(4)
+        six_times = gmpy2.mpz(6) * (x // gmpy2.mpz(6))
+        if (x - six_times) <= 1:
+            x = six_times - gmpy2.mpz(1)
+            if gmpy2.is_prime(x, n):
+                return x
+            x -= gmpy2.mpz(4)
         else:
-            n = six_times + gmpy2.mpz(1)
+            x = six_times + gmpy2.mpz(1)
         while True:
-            if gmpy2.is_prime(n, 128):
-                return n
-            n -= gmpy2.mpz(2)
-            if gmpy2.is_prime(n, 128):
-                return n
-            n -= gmpy2.mpz(4)
+            if gmpy2.is_prime(x, n):
+                return x
+            x -= gmpy2.mpz(2)
+            if gmpy2.is_prime(x, n):
+                return x
+            x -= gmpy2.mpz(4)
