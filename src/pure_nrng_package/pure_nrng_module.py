@@ -13,7 +13,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-from typing import Callable
+from typing import Callable, Union, Tuple
+from collections.abc import Sized
 import gmpy2
 import rng_util_package.rng_util_module as rng_util
 
@@ -32,35 +33,55 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.8.3'
+    version = '0.9.0'
+    
+    True_Randbits = Callable[[int], int]
+    Unbias = bool
     
     initial_test_size = 2 ** 13  #The units are bits.
     count_queue_maxlen = 31
     
-    def __init__(self, *true_randbits_tuple: Callable[[int], int]) -> None:
+    def __init__(self, *true_randbits_args: Union[True_Randbits, Tuple[True_Randbits, Unbias]]) -> None:
         '''
             Create an instance of a true random number generator.  创建一个真随机数生成器的实例。
             
             Parameters
             ----------
-            *true_randbits_tuple: Callable
-                Some callable external true random source objects. Like: secrets.randbits(bit_size) 一些可调用的外部真随机源对象。形如：secrets.randbits(bit_size)
+            *true_randbits_args: True_Randbits, or tuple(True_Randbits, Unbias)
+                True_Randbits = Callable[[int], int]
+                True_Randbits are some callable external true random source objects. Like: secrets.randbits(bit_size)  True_Randbits是一些可调用的外部真随机源对象。形如：secrets.randbits(bit_size)
                 If it does not exist, the default is to call the true random source provided by the operating system. 如果不存在的话，则默认调用操作系统提供的真随机源。
+                
+                Unbias = bool
+                Set Unbias to true and enable unbiased processing of true random Numbers used.  Unbias设为真，则对用到的真随机数启用无偏处理。
         '''
-        for true_randbits in true_randbits_tuple:
-            assert isinstance(true_randbits, Callable), f'true_randbits must be an Callable, got type {type(true_randbits).__name__}'
+        for item in true_randbits_args:
+            if isinstance(item, Sized):
+                assert isinstance(item, tuple), f'true_randbits_args must be an Callable or tuple, got type {type(item).__name__}'
+                assert len(item) == 2, 'There can only be two entries in a tuple, got {len(item)}'
+                true_randbits = item[0]; unbias = item[1]
+                assert isinstance(true_randbits, Callable), f'True_Randbits must be an Callable, got type {type(true_randbits).__name__}'
+                assert isinstance(unbias, bool), f'Unbias must be an bool, got type {type(unbias).__name__}'
+            else:
+                assert isinstance(item, Callable), f'True_Randbits must be an Callable, got type {type(item).__name__}'
         
         from collections import deque
         
-        if true_randbits_tuple == ():
+        if true_randbits_args == ():
             from secrets import randbits
-            true_randbits_tuple = (randbits,)
+            true_randbits_args = (randbits,)
         
         initial_test_size = self.__class__.initial_test_size
         count_queue_maxlen = self.__class__.count_queue_maxlen
+        
         self.raw_entropy_dict = dict()
         
-        for true_randbits in true_randbits_tuple:
+        for item in true_randbits_args:
+            if isinstance(item, tuple):
+                true_randbits = item[0]; unbias = item[1]
+            else:
+                true_randbits = item; unbias = True
+            
             raw_entropy_data = true_randbits(initial_test_size)
             number_of_1 = gmpy2.popcount(raw_entropy_data)
             number_of_0 = initial_test_size - number_of_1
@@ -74,10 +95,10 @@ class pure_nrng:
             
             min_entropy_value = rng_util.min_entropy(sum_of_0, sum_of_1)
             
-            self.raw_entropy_dict.update({true_randbits: {'count_queue_of_0': count_queue_of_0, 'count_queue_of_1': count_queue_of_1, 'sum_of_0': sum_of_0, 'sum_of_1': sum_of_1, 'min_entropy_value': min_entropy_value}})
+            self.raw_entropy_dict.update({true_randbits: {'unbias': unbias, 'count_queue_of_0': count_queue_of_0, 'count_queue_of_1': count_queue_of_1, 'sum_of_0': sum_of_0, 'sum_of_1': sum_of_1, 'min_entropy_value': min_entropy_value}})
     
     
-    def true_rand_bits(self, bit_size: int, unbias: bool = True) -> int:
+    def true_rand_bits(self, bit_size: int) -> int:
         '''
             Get a true random binary number.  得到一个真随机二进制数。
             
@@ -86,24 +107,20 @@ class pure_nrng:
             bit_size: int
                 Sets the true random number that takes the specified bit length.  设定取指定比特长度的真随机数。
             
-            unbias: bool, default True
-                Set to true, and enable unbiased processing for the true random Numbers used. 设为真，则对用到的真随机数启用无偏处理。
-            
             Returns
             -------
             true_rand_bits: int
                 Returns a true random number of the specified bit length. 返回一个指定比特长度真随机数。
         '''
         assert isinstance(bit_size, int), f'bit_size must be an int, got type {type(bit_size).__name__}'
-        assert isinstance(unbias, bool), f'unbias must be an bool, got type {type(unbias).__name__}'
         if bit_size <= 0: raise ValueError('bit_size must be > 0')
         
         initial_test_size = self.__class__.initial_test_size
         
-        if unbias:
-            unbias_entropy_data = 0
+        output_entropy_data = 0
             
-            for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
+        for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
+            if binary_statistics_dict['unbias']:
                 min_entropy_value = binary_statistics_dict['min_entropy_value']
                 if min_entropy_value != 0:
                     read_raw_length = int(gmpy2.ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
@@ -132,17 +149,14 @@ class pure_nrng:
                         read_raw_length = initial_test_size
                 else:
                     raise RuntimeError(f'Entropy source [{true_randbits}] exception!')
-                unbias_entropy_data ^= rng_util.randomness_extractor(raw_entropy_data, bit_size)
-            
-            return unbias_entropy_data
-        else:
-            raw_entropy_data = 0
-            for true_randbits in self.raw_entropy_dict.keys():
-                raw_entropy_data ^= true_randbits(bit_size)
-            return raw_entropy_data
+                output_entropy_data ^= rng_util.randomness_extractor(raw_entropy_data, bit_size)
+            else:
+                output_entropy_data ^= true_randbits(bit_size)
+        
+        return output_entropy_data
     
     
-    def true_rand_float(self, bit_size: int, unbias: bool = True) -> gmpy2.mpfr:
+    def true_rand_float(self, bit_size: int) -> gmpy2.mpfr:
         '''
             Get a true random real number. 得到一个真随机实数。
             
@@ -151,9 +165,6 @@ class pure_nrng:
             bit_size: int
                 Sets the true random number that takes the specified bit length.  设定取指定比特长度的真随机数。
             
-            unbias: bool, default True
-                Set to true, and enable unbiased processing for the true random Numbers used. 设为真，则对用到的真随机数启用无偏处理。
-            
             Returns
             -------
             true_rand_float: gmpy2.mpfr
@@ -161,13 +172,12 @@ class pure_nrng:
                 The output float length is bit_size+1. 输出浮点长度是bit_size+1。
         '''
         assert isinstance(bit_size, int), f'bit_size must be an int, got type {type(bit_size).__name__}'
-        assert isinstance(unbias, bool), f'unbias must be an bool, got type {type(unbias).__name__}'
         
         with gmpy2.local_context(gmpy2.context(), precision = bit_size + 1):
-            return gmpy2.mpfr(self.true_rand_bits(bit_size, unbias)) / gmpy2.mpfr(1 << bit_size)
+            return gmpy2.mpfr(self.true_rand_bits(bit_size)) / gmpy2.mpfr(1 << bit_size)
     
     
-    def true_rand_int(self, b: int, a: int = 0, unbias: bool = True) -> gmpy2.mpz:
+    def true_rand_int(self, b: int, a: int = 0) -> gmpy2.mpz:
         '''
             Get a true random integer within a specified interval. 得到一个指定区间内的真随机整数。
             
@@ -179,9 +189,6 @@ class pure_nrng:
             a: int, default 0
                 Lower bound on the range including 'a'.
             
-            unbias: bool, default True
-                Set to true, and enable unbiased processing for the true random Numbers used. 设为真，则对用到的真随机数启用无偏处理。
-            
             Returns
             -------
             true_rand_int: gmpy2.mpz
@@ -189,14 +196,14 @@ class pure_nrng:
         '''
         assert isinstance(b, int), f'b must be an int, got type {type(b).__name__}'
         assert isinstance(a, int), f'a must be an int, got type {type(a).__name__}'
-        assert isinstance(unbias, bool), f'unbias must be an bool, got type {type(unbias).__name__}'
         if a > b: raise ValueError('a must be <= b')
         
-        scale = b - a
-        bit_size = scale.bit_length()
-        
-        random_number_masked = self.true_rand_bits(bit_size, unbias)
-        while not (random_number_masked <= scale):
-            random_number_masked = self.true_rand_bits(bit_size, unbias)
-        
-        return a + random_number_masked
+        difference_value = b - a
+        if difference_value == 0:
+            return a
+        else:
+            bit_size = difference_value.bit_length()
+            random_number_masked = self.true_rand_bits(bit_size)
+            while not (random_number_masked <= difference_value):
+                random_number_masked = self.true_rand_bits(bit_size)
+            return a + random_number_masked
