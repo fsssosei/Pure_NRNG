@@ -120,7 +120,8 @@ def randomness_extractor(raw_entropy_data: int, output_bit_size: int) -> int:
     from math import ceil
     from hashlib import shake_256
     
-    raw_entropy_byte_length = ceil(raw_entropy_data.bit_length() / 8)
+    if (raw_entropy_byte_length:= ceil(raw_entropy_data.bit_length() / 8)) == 0:
+        raw_entropy_byte_length = 1
     digest_byte_length = ceil(output_bit_size / 8)
     hash_raw_entropy_bytes = shake_256(raw_entropy_data.to_bytes(raw_entropy_byte_length, byteorder = 'little')).digest(digest_byte_length)
     return bit_length_mask(int.from_bytes(hash_raw_entropy_bytes, byteorder = 'little'), output_bit_size)
