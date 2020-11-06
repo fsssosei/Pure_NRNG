@@ -18,4 +18,4 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from rng_util_package.rng_util_module import *
 
-version = '0.8.2'
+version = '0.8.3'
