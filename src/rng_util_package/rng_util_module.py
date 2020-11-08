@@ -13,7 +13,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-import gmpy2
+from math import ceil
+from hashlib import shake_256
+from gmpy2 import mpfr, mpz, local_context as gmpy2_local_context, context as gmpy2_context, log2 as gmpy2_log2, is_prime as gmpy2_is_prime
 
 __all__ = ['bit_length_mask', 'min_entropy', 'randomness_extractor', 'prev_prime']
 
@@ -49,7 +51,7 @@ def bit_length_mask(x: int, bit_length: int) -> int:
     return x
 
 
-def min_entropy(number_of_0: int, number_of_1: int) -> gmpy2.mpfr:
+def min_entropy(number_of_0: int, number_of_1: int) -> mpfr:
     '''
         The minimum entropy of a binary sequence is calculated based on the number of zeros and ones in the sequence.  根据二进制序列中0与1的数目，计算此序列的最小熵值。
         
@@ -79,8 +81,8 @@ def min_entropy(number_of_0: int, number_of_1: int) -> gmpy2.mpfr:
     length = number_of_0 + number_of_1
     if length == 0: raise ValueError('(number_of_0 + number_of_1) must be > 0')
     
-    with gmpy2.local_context(gmpy2.context(), precision = length + 1):
-        return -gmpy2.log2(gmpy2.mpfr(max(number_of_0, number_of_1)) / gmpy2.mpfr(length))
+    with gmpy2_local_context(gmpy2_context(), precision = length + 1):
+        return -gmpy2_log2(mpfr(max(number_of_0, number_of_1)) / mpfr(length))
 
 
 def randomness_extractor(raw_entropy_data: int, output_bit_size: int) -> int:
@@ -117,9 +119,6 @@ def randomness_extractor(raw_entropy_data: int, output_bit_size: int) -> int:
     if raw_entropy_data < 0: raise ValueError('raw_entropy_data must be >= 0')
     if output_bit_size <= 0: raise ValueError('output_bit_size must be > 0')
     
-    from math import ceil
-    from hashlib import shake_256
-    
     if (raw_entropy_byte_length:= ceil(raw_entropy_data.bit_length() / 8)) == 0:
         raw_entropy_byte_length = 1
     digest_byte_length = ceil(output_bit_size / 8)
@@ -127,7 +126,7 @@ def randomness_extractor(raw_entropy_data: int, output_bit_size: int) -> int:
     return bit_length_mask(int.from_bytes(hash_raw_entropy_bytes, byteorder = 'little'), output_bit_size)
 
 
-def prev_prime(x: int, n: int = 128) -> gmpy2.mpz:
+def prev_prime(x: int, n: int = 128) -> mpz:
     '''
         Find the largest prime number less than x.  查找小于x的最大质数。
         
@@ -152,24 +151,27 @@ def prev_prime(x: int, n: int = 128) -> gmpy2.mpz:
     assert isinstance(x, int), f'x must be an int, got type {type(x).__name__}'
     assert isinstance(n, int), f'n must be an int, got type {type(n).__name__}'
     
-    x = gmpy2.mpz(x)
+    local_mpz = mpz  #The module-level name is converted to the local name.  模块级名称转为本地名称。
+    local_gmpy2_is_prime = gmpy2_is_prime  #The module-level name is converted to the local name.  模块级名称转为本地名称。
+    
+    x = local_mpz(x)
     if x <= 2:
         raise ValueError('There are no prime Numbers less than 2')
     elif x <= 5:
-        return {3: gmpy2.mpz(2), 4: gmpy2.mpz(3), 5: gmpy2.mpz(3)}[x]
+        return {3: local_mpz(2), 4: local_mpz(3), 5: local_mpz(3)}[x]
     else:
-        six_times = gmpy2.mpz(6) * (x // gmpy2.mpz(6))
+        six_times = local_mpz(6) * (x // local_mpz(6))
         if (x - six_times) <= 1:
-            x = six_times - gmpy2.mpz(1)
-            if gmpy2.is_prime(x, n):
+            x = six_times - local_mpz(1)
+            if local_gmpy2_is_prime(x, n):
                 return x
-            x -= gmpy2.mpz(4)
+            x -= local_mpz(4)
         else:
-            x = six_times + gmpy2.mpz(1)
+            x = six_times + local_mpz(1)
         while True:
-            if gmpy2.is_prime(x, n):
+            if local_gmpy2_is_prime(x, n):
                 return x
-            x -= gmpy2.mpz(2)
-            if gmpy2.is_prime(x, n):
+            x -= local_mpz(2)
+            if local_gmpy2_is_prime(x, n):
                 return x
-            x -= gmpy2.mpz(4)
+            x -= local_mpz(4)
