@@ -15,7 +15,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from typing import Callable, Union, Tuple
 from collections.abc import Sized
-import gmpy2
+from collections import deque
+from secrets import randbits as secrets_randbits
+from gmpy2 import mpfr, mpz, popcount as gmpy2_popcount, ceil as gmpy2_ceil, local_context as gmpy2_local_context, context as gmpy2_context
 import rng_util_package.rng_util_module as rng_util
 
 __all__ = ['pure_nrng', 'rng_util']
@@ -33,7 +35,7 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.9.1'
+    version = '0.9.2'
     
     True_Randbits = Callable[[int], int]
     Unbias = bool
@@ -65,11 +67,8 @@ class pure_nrng:
             else:
                 assert isinstance(item, Callable), f'True_Randbits must be an Callable, got type {type(item).__name__}'
         
-        from collections import deque
-        
         if true_randbits_args == ():
-            from secrets import randbits
-            true_randbits_args = (randbits,)
+            true_randbits_args = (secrets_randbits,)
         
         initial_test_size = self.__class__.initial_test_size
         count_queue_maxlen = self.__class__.count_queue_maxlen
@@ -83,7 +82,7 @@ class pure_nrng:
                 true_randbits = item; unbias = True
             
             raw_entropy_data = true_randbits(initial_test_size)
-            number_of_1 = gmpy2.popcount(raw_entropy_data)
+            number_of_1 = gmpy2_popcount(raw_entropy_data)
             number_of_0 = initial_test_size - number_of_1
             
             count_queue_of_0 = deque([number_of_0], maxlen = count_queue_maxlen)
@@ -123,12 +122,12 @@ class pure_nrng:
             if binary_statistics_dict['unbias']:
                 min_entropy_value = binary_statistics_dict['min_entropy_value']
                 if min_entropy_value != 0:
-                    read_raw_length = int(gmpy2.ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
+                    read_raw_length = int(gmpy2_ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
                 else:
                     read_raw_length = initial_test_size
                 for _ in range(3):  #The entropy source is re-read when the "minimum entropy" of the source is zero. Try twice at most.  当熵源发生“最小熵”为0的异常，就会重新读熵源。最多重试两次。
                     raw_entropy_data = true_randbits(read_raw_length)
-                    number_of_1 = gmpy2.popcount(raw_entropy_data)
+                    number_of_1 = gmpy2_popcount(raw_entropy_data)
                     number_of_0 = read_raw_length - number_of_1
                     
                     if len(binary_statistics_dict['count_queue_of_0']) == binary_statistics_dict['count_queue_of_0'].maxlen:
@@ -156,7 +155,7 @@ class pure_nrng:
         return output_entropy_data
     
     
-    def true_rand_float(self, bit_size: int) -> gmpy2.mpfr:
+    def true_rand_float(self, bit_size: int) -> mpfr:
         '''
             Get a true random real number. 得到一个真随机实数。
             
@@ -167,17 +166,17 @@ class pure_nrng:
             
             Returns
             -------
-            true_rand_float: gmpy2.mpfr
+            true_rand_float: mpfr
                 Returns a true random real number in [0, 1), with 0 included and 1 excluded.
                 The output float length is bit_size+1. 输出浮点长度是bit_size+1。
         '''
         assert isinstance(bit_size, int), f'bit_size must be an int, got type {type(bit_size).__name__}'
         
-        with gmpy2.local_context(gmpy2.context(), precision = bit_size + 1):
-            return gmpy2.mpfr(self.true_rand_bits(bit_size)) / gmpy2.mpfr(1 << bit_size)
+        with gmpy2_local_context(gmpy2_context(), precision = bit_size + 1):
+            return mpfr(self.true_rand_bits(bit_size)) / mpfr(1 << bit_size)
     
     
-    def true_rand_int(self, b: int, a: int = 0) -> gmpy2.mpz:
+    def true_rand_int(self, b: int, a: int = 0) -> mpz:
         '''
             Get a true random integer within a specified interval. 得到一个指定区间内的真随机整数。
             
@@ -191,7 +190,7 @@ class pure_nrng:
             
             Returns
             -------
-            true_rand_int: gmpy2.mpz
+            true_rand_int: mpz
                 Returns an integer true random number in the range [a, b]
         '''
         assert isinstance(b, int), f'b must be an int, got type {type(b).__name__}'
