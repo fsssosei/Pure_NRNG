@@ -117,7 +117,7 @@ class pure_nrng:
         initial_test_size = self.__class__.initial_test_size
         
         output_entropy_data = 0
-            
+        
         for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
             if binary_statistics_dict['unbias']:
                 min_entropy_value = binary_statistics_dict['min_entropy_value']
