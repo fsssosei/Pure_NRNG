@@ -30,6 +30,9 @@ The statement to import the package:
 Example:
 
 	>>> nrng_instance = pure_nrng()
-	>>> a = nrng_instance.true_rand_bits(256)
-	>>> b = nrng_instance.true_rand_float(256)
-	>>> c = nrng_instance.true_rand_int(100, 1)
+	>>> true_rand_bits = nrng_instance.true_rand_bits(256)
+	>>> next(true_rand_bits)
+	>>> true_rand_float = nrng_instance.true_rand_float(256)
+	>>> next(true_rand_float)
+	>>> true_rand_int = nrng_instance.true_rand_int(100, 1)
+	>>> next(true_rand_int)
