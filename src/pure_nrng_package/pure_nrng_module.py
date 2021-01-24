@@ -13,11 +13,11 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, Iterator
 from collections.abc import Sized
 from collections import deque
 from secrets import randbits as secrets_randbits
-from gmpy2 import mpfr, mpz, popcount as gmpy2_popcount, ceil as gmpy2_ceil, local_context as gmpy2_local_context, context as gmpy2_context
+from gmpy2 import mpfr, mpz, popcount as gmpy2_popcount, ceil as gmpy2_ceil, local_context as gmpy2_local_context, context as gmpy2_get_context
 import rng_util_package.rng_util_module as rng_util
 
 __all__ = ['pure_nrng', 'rng_util']
@@ -35,12 +35,12 @@ class pure_nrng:
         The generated instance is thread-safe.
     '''
     
-    version = '0.9.2'
+    version = '1.0.0'
     
     True_Randbits = Callable[[int], int]
     Unbias = bool
     
-    initial_test_size = 2 ** 13  #The units are bits.
+    initial_test_size = 1 << 13  #The units are bits.
     count_queue_maxlen = 31
     
     def __init__(self, *true_randbits_args: Union[True_Randbits, Tuple[True_Randbits, Unbias]]) -> None:
@@ -97,7 +97,7 @@ class pure_nrng:
             self.raw_entropy_dict.update({true_randbits: {'unbias': unbias, 'count_queue_of_0': count_queue_of_0, 'count_queue_of_1': count_queue_of_1, 'sum_of_0': sum_of_0, 'sum_of_1': sum_of_1, 'min_entropy_value': min_entropy_value}})
     
     
-    def true_rand_bits(self, bit_size: int) -> int:
+    def true_rand_bits(self, bit_size: int) -> Iterator[int]:
         '''
             Get a true random binary number.  得到一个真随机二进制数。
             
@@ -106,8 +106,8 @@ class pure_nrng:
             bit_size: int
                 Sets the true random number that takes the specified bit length.  设定取指定比特长度的真随机数。
             
-            Returns
-            -------
+            Iterator
+            --------
             true_rand_bits: int
                 Returns a true random number of the specified bit length. 返回一个指定比特长度真随机数。
         '''
@@ -116,67 +116,73 @@ class pure_nrng:
         
         initial_test_size = self.__class__.initial_test_size
         
-        output_entropy_data = 0
-        
-        for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
-            if binary_statistics_dict['unbias']:
-                min_entropy_value = binary_statistics_dict['min_entropy_value']
-                if min_entropy_value != 0:
-                    read_raw_length = int(gmpy2_ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
-                else:
-                    read_raw_length = initial_test_size
-                for _ in range(3):  #The entropy source is re-read when the "minimum entropy" of the source is zero. Try twice at most.  当熵源发生“最小熵”为0的异常，就会重新读熵源。最多重试两次。
-                    raw_entropy_data = true_randbits(read_raw_length)
-                    number_of_1 = gmpy2_popcount(raw_entropy_data)
-                    number_of_0 = read_raw_length - number_of_1
-                    
-                    if len(binary_statistics_dict['count_queue_of_0']) == binary_statistics_dict['count_queue_of_0'].maxlen:
-                        binary_statistics_dict['sum_of_0'] -= binary_statistics_dict['count_queue_of_0'].popleft()
-                    binary_statistics_dict['sum_of_0'] += number_of_0
-                    binary_statistics_dict['count_queue_of_0'].append(number_of_0)
-                    
-                    if len(binary_statistics_dict['count_queue_of_1']) == binary_statistics_dict['count_queue_of_1'].maxlen:
-                        binary_statistics_dict['sum_of_1'] -= binary_statistics_dict['count_queue_of_1'].popleft()
-                    binary_statistics_dict['sum_of_1'] += number_of_1
-                    binary_statistics_dict['count_queue_of_1'].append(number_of_1)
-                    
-                    min_entropy_value = rng_util.min_entropy(binary_statistics_dict['sum_of_0'], binary_statistics_dict['sum_of_1'])
+        while True:
+            output_entropy_data = 0
+            
+            for true_randbits, binary_statistics_dict in self.raw_entropy_dict.items():
+                if binary_statistics_dict['unbias']:
+                    min_entropy_value = binary_statistics_dict['min_entropy_value']
                     if min_entropy_value != 0:
-                        binary_statistics_dict['min_entropy_value'] = min_entropy_value
-                        break
+                        read_raw_length = int(gmpy2_ceil(bit_size * 2 / min_entropy_value))  #the amount of entropy input is twice the number of bits output from them, that output can be considered essentially fully random.
                     else:
                         read_raw_length = initial_test_size
+                    for _ in range(3):  #The entropy source is re-read when the "minimum entropy" of the source is zero. Try twice at most.  当熵源发生“最小熵”为0的异常，就会重新读熵源。最多重试两次。
+                        raw_entropy_data = true_randbits(read_raw_length)
+                        number_of_1 = gmpy2_popcount(raw_entropy_data)
+                        number_of_0 = read_raw_length - number_of_1
+                        
+                        if len(binary_statistics_dict['count_queue_of_0']) == binary_statistics_dict['count_queue_of_0'].maxlen:
+                            binary_statistics_dict['sum_of_0'] -= binary_statistics_dict['count_queue_of_0'].popleft()
+                        binary_statistics_dict['sum_of_0'] += number_of_0
+                        binary_statistics_dict['count_queue_of_0'].append(number_of_0)
+                        
+                        if len(binary_statistics_dict['count_queue_of_1']) == binary_statistics_dict['count_queue_of_1'].maxlen:
+                            binary_statistics_dict['sum_of_1'] -= binary_statistics_dict['count_queue_of_1'].popleft()
+                        binary_statistics_dict['sum_of_1'] += number_of_1
+                        binary_statistics_dict['count_queue_of_1'].append(number_of_1)
+                        
+                        min_entropy_value = rng_util.min_entropy(binary_statistics_dict['sum_of_0'], binary_statistics_dict['sum_of_1'])
+                        if min_entropy_value != 0:
+                            binary_statistics_dict['min_entropy_value'] = min_entropy_value
+                            break
+                        else:
+                            read_raw_length = initial_test_size
+                    else:
+                        raise RuntimeError(f'Entropy source [{true_randbits}] exception!')
+                    output_entropy_data ^= rng_util.randomness_extractor(raw_entropy_data, bit_size)
                 else:
-                    raise RuntimeError(f'Entropy source [{true_randbits}] exception!')
-                output_entropy_data ^= rng_util.randomness_extractor(raw_entropy_data, bit_size)
-            else:
-                output_entropy_data ^= true_randbits(bit_size)
-        
-        return output_entropy_data
+                    output_entropy_data ^= true_randbits(bit_size)
+            
+            yield output_entropy_data
     
     
-    def true_rand_float(self, bit_size: int) -> mpfr:
+    def true_rand_float(self, precision: int = 53) -> Iterator[mpfr]:
         '''
             Get a true random real number. 得到一个真随机实数。
             
             Parameters
             ----------
-            bit_size: int
-                Sets the true random number that takes the specified bit length.  设定取指定比特长度的真随机数。
+            precision: int, default 53
+                Output binary floating point precision.  输出的二进制浮点精度。
+                Precision must be >= 2
             
-            Returns
-            -------
+            Iterator
+            --------
             true_rand_float: mpfr
                 Returns a true random real number in [0, 1), with 0 included and 1 excluded.
-                The output float length is bit_size+1. 输出浮点长度是bit_size+1。
         '''
-        assert isinstance(bit_size, int), f'bit_size must be an int, got type {type(bit_size).__name__}'
+        assert isinstance(precision, int), f'precision must be an int, got type {type(precision).__name__}'
+        if precision < 2: raise ValueError('precision must be >= 2')
         
-        with gmpy2_local_context(gmpy2_context(), precision = bit_size + 1):
-            return mpfr(self.true_rand_bits(bit_size)) / mpfr(1 << bit_size)
+        true_rand_bits = self.true_rand_bits(bit_size)
+        with gmpy2_local_context(gmpy2_get_context(), precision = precision):
+            bit_size = precision - 1
+            denominator = mpfr(1 << bit_size)
+            while True:
+                yield mpfr(next(true_rand_bits)) / denominator
     
     
-    def true_rand_int(self, b: int, a: int = 0) -> mpz:
+    def true_rand_int(self, b: int, a: int = 0) -> Iterator[mpz]:
         '''
             Get a true random integer within a specified interval. 得到一个指定区间内的真随机整数。
             
@@ -188,8 +194,8 @@ class pure_nrng:
             a: int, default 0
                 Lower bound on the range including 'a'.
             
-            Returns
-            -------
+            Iterator
+            --------
             true_rand_int: mpz
                 Returns an integer true random number in the range [a, b]
         '''
@@ -199,10 +205,11 @@ class pure_nrng:
         
         difference_value = b - a
         if difference_value == 0:
-            return a
+            while True:
+                yield a
         else:
             bit_size = difference_value.bit_length()
-            random_number_masked = self.true_rand_bits(bit_size)
-            while not (random_number_masked <= difference_value):
-                random_number_masked = self.true_rand_bits(bit_size)
-            return a + random_number_masked
+            true_rand_bits = self.true_rand_bits(bit_size)
+            while True:
+                while not ((random_number:= next(true_rand_bits)) <= difference_value): pass
+                yield a + random_number
