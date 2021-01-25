@@ -179,7 +179,7 @@ class pure_nrng:
             bit_size = precision - 1
             denominator = mpfr(1 << bit_size)
             while True:
-                yield mpfr(next(true_rand_bits)) / denominator  # Will raise StopIteration if lines is exhausted
+                yield mpfr(next(true_rand_bits)) / denominator  #lgtm [py/unguarded-next-in-generator]
     
     
     def true_rand_int(self, b: int, a: int = 0) -> Iterator[mpz]:
@@ -211,5 +211,5 @@ class pure_nrng:
             bit_size = difference_value.bit_length()
             true_rand_bits = self.true_rand_bits(bit_size)
             while True:
-                while not ((random_number:= next(true_rand_bits)) <= difference_value): pass  # Will raise StopIteration if lines is exhausted
+                while not ((random_number:= next(true_rand_bits)) <= difference_value): pass  #lgtm [py/unguarded-next-in-generator]
                 yield a + random_number
