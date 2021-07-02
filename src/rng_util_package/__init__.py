@@ -1,6 +1,6 @@
 '''
 rng_util - This is the common function package of random number generator.
-Copyright (C) 2020  sosei
+Copyright (C) 2020-2021  sosei
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
@@ -18,4 +18,4 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from rng_util_package.rng_util_module import *
 
-version = '1.0.0'
+version = '1.1.0'
