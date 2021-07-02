@@ -1,6 +1,6 @@
 '''
 pure_nrng - This package is used to generate non-deterministic random Numbers.
-Copyright (C) 2020  sosei
+Copyright (C) 2020-2021  sosei
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
@@ -23,7 +23,7 @@ with open("README.md", encoding='utf-8') as fh:
 
 setup(
     name='pure_nrng',
-    version='1.0.0',
+    version='1.1.0',
     description='Generate multi-precision non-deterministic random Numbers.',
     long_description=long_description,
     long_description_content_type='text/markdown',
