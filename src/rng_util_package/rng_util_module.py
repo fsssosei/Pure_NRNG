@@ -1,6 +1,6 @@
 '''
 rng_util - This is the common function package of random number generator.  这个是随机数发生器的公共函数包。
-Copyright (C) 2020  sosei
+Copyright (C) 2020-2021  sosei
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
 by the Free Software Foundation, either version 3 of the License, or
@@ -15,9 +15,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from typing import TypeVar
 from hashlib import shake_256
-from gmpy2 import mpfr, mpz, local_context as gmpy2_local_context, context as gmpy2_get_context, num_digits as gmpy2_num_digits, c_div as gmpy2_c_div, log2 as gmpy2_log2
+from gmpy2 import mpfr, mpz, bit_mask as gmpy2_bit_mask, local_context as gmpy2_local_context, context as gmpy2_get_context, num_digits as gmpy2_num_digits, c_div as gmpy2_c_div, log2 as gmpy2_log2
 
-__all__ = ['bit_length_mask', 'min_entropy', 'randomness_extractor']
+__all__ = ['bit_length_mask', 'rotl', 'rotr', 'min_entropy', 'randomness_extractor']
 
 Integer = TypeVar('Integer', int, mpz)
 
@@ -51,6 +51,80 @@ def bit_length_mask(x: Integer, bit_length: Integer) -> Integer:
     
     x &= (1 << bit_length) - 1
     return x
+
+
+def rotl(value: Integer, wide: Integer, offset: Integer) -> Integer:
+    '''
+        Performs a bit left rotation of the value.
+        
+        Parameters
+        ----------
+        value: Integer
+            The value to be rotated.
+        
+        wide: Integer
+            The bit width of the value.
+        
+        offset: Integer
+            The offset bits.
+        
+        Returns
+        -------
+        rotl: Integer
+            Returns the result of bit rotation.
+        
+        Examples
+        --------
+        >>> binary_number = '1111100000'
+        >>> format(rotl(int(binary_number, 2), 10, 2), '010b')
+        '1110000011'
+    '''
+    assert isinstance(value, (int, type(mpz(0)))), f'value must be an Integer, got type {type(value).__name__}'
+    assert isinstance(wide, (int, type(mpz(0)))), f'wide must be an Integer, got type {type(wide).__name__}'
+    assert isinstance(offset, (int, type(mpz(0)))), f'offset must be an Integer, got type {type(offset).__name__}'
+    if value < 0: raise ValueError('value must be >= 0')
+    if wide < 0: raise ValueError('wide must be >= 0')
+    if not(0 <= offset < wide): raise ValueError('offset must be in the range [0, wide)')
+    
+    value = bit_length_mask(value, wide)
+    return ((value << offset) & gmpy2_bit_mask(wide)) | (value >> (wide - offset))
+
+
+def rotr(value: Integer, wide: Integer, offset: Integer) -> Integer:
+    '''
+        Performs a bit right rotation of the value.
+        
+        Parameters
+        ----------
+        value: Integer
+            The value to be rotated.
+        
+        wide: Integer
+            The bit width of the value.
+        
+        offset: Integer
+            The offset bits.
+        
+        Returns
+        -------
+        rotr: Integer
+            Returns the result of bit rotation.
+        
+        Examples
+        --------
+        >>> binary_number = '1111100000'
+        >>> format(rotr(int(binary_number, 2), 10, 2), '010b')
+        '0011111000'
+    '''
+    assert isinstance(value, (int, type(mpz(0)))), f'value must be an Integer, got type {type(value).__name__}'
+    assert isinstance(wide, (int, type(mpz(0)))), f'wide must be an Integer, got type {type(wide).__name__}'
+    assert isinstance(offset, (int, type(mpz(0)))), f'offset must be an Integer, got type {type(offset).__name__}'
+    if value < 0: raise ValueError('value must be >= 0')
+    if wide < 0: raise ValueError('wide must be >= 0')
+    if not(0 <= offset < wide): raise ValueError('offset must be in the range [0, wide)')
+    
+    value = bit_length_mask(value, wide)
+    return (value >> offset) | ((value << (wide - offset)) & gmpy2_bit_mask(wide))
 
 
 def min_entropy(number_of_0: Integer, number_of_1: Integer) -> mpfr:
